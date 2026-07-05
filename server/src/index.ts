@@ -62,3 +62,54 @@ app.listen(port, () => {
 });
 
 export default app;
+
+app.get('/health', async (req, res) => {
+    const checks = {
+        database: false,
+        redis: false,
+        gemini: false,
+        fysora: false
+    };
+    
+    // Check database
+    try {
+        await prisma.$queryRaw`SELECT 1`;
+        checks.database = true;
+    } catch (e) {
+        logger.error('Database health check failed:', e);
+    }
+    
+    // Check Redis
+    try {
+        await redisClient.ping();
+        checks.redis = true;
+    } catch (e) {
+        logger.error('Redis health check failed:', e);
+    }
+    
+    // Check Gemini
+    try {
+        const geminiService = GeminiService.getInstance();
+        await geminiService.healthCheck();
+        checks.gemini = true;
+    } catch (e) {
+        logger.error('Gemini health check failed:', e);
+    }
+    
+    // Check FYSORA FASHN
+    try {
+        const syncService = new SyncService();
+        await syncService.healthCheck();
+        checks.fysora = true;
+    } catch (e) {
+        logger.error('FYSORA FASHN health check failed:', e);
+    }
+    
+    const healthy = Object.values(checks).every(v => v === true);
+    
+    res.status(healthy ? 200 : 503).json({
+        status: healthy ? 'healthy' : 'degraded',
+        checks,
+        timestamp: new Date().toISOString()
+    });
+});
