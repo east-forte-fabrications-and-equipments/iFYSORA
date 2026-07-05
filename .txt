@@ -1,0 +1,39 @@
+### 10. **Secrets Management for Production**
+
+Create a script for encrypting sensitive data:
+
+#### `scripts/encrypt-secrets.js`
+
+```javascript
+const crypto = require('crypto');
+const fs = require('fs');
+
+const algorithm = 'aes-256-gcm';
+const key = Buffer.from(process.env.ENCRYPTION_KEY, 'hex');
+
+function encrypt(text) {
+    const iv = crypto.randomBytes(16);
+    const cipher = crypto.createCipheriv(algorithm, key, iv);
+    let encrypted = cipher.update(text, 'utf8', 'hex');
+    encrypted += cipher.final('hex');
+    const authTag = cipher.getAuthTag();
+    return {
+        iv: iv.toString('hex'),
+        encrypted: encrypted,
+        authTag: authTag.toString('hex'),
+    };
+}
+
+// Usage: node scripts/encrypt-secrets.js
+const secrets = {
+    geminiApiKey: process.env.GEMINI_API_KEY,
+    fysoraApiKey: process.env.FYSORA_FASHN_API_KEY,
+    // ... more secrets
+};
+
+const encrypted = {};
+for (const [key, value] of Object.entries(secrets)) {
+    encrypted[key] = encrypt(value);
+}
+
+fs.writeFileSync('secrets.encrypted.json', JSON.stringify(encrypted, null, 2));
