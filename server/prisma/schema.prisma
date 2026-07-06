@@ -1,0 +1,140 @@
+model User {
+  id                String            @id @default(cuid())
+  email             String            @unique
+  phone             String?           @unique
+  passwordHash      String?
+  displayName       String
+  profilePicture    String?
+  
+  // Client identification
+  clientPortraits   ClientPortrait[]
+  activePortraitId  String?
+  activePortrait    ClientPortrait?   @relation("ActivePortrait", fields: [activePortraitId], references: [id])
+  
+  // Existing fields...
+  fysoraUserId      String?           @unique
+  ecosystemUserId   String?           @unique
+  role              UserRole          @default(CUSTOMER)
+  subscriptionId    String?
+  planId            String?
+  subscriptionStatus SubscriptionStatus @default(EXPIRED)
+  verificationLevel Int               @default(0)
+  isVerified        Boolean           @default(false)
+  verificationData  Json?
+  permissions       Json?
+  cloudProviders    Json?
+  backupSettings    Json?
+  lastLoginAt       DateTime?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  deletedAt         DateTime?
+  
+  measurements      Measurement[]
+  organizations     OrganizationMember[]
+  auditLogs         AuditLog[]
+  sessions          Session[]
+  
+  @@index([email])
+  @@index([ecosystemUserId])
+  @@index([fysoraUserId])
+  @@index([role])
+  @@index([subscriptionStatus])
+}
+
+model ClientPortrait {
+  id                String            @id @default(cuid())
+  userId            String
+  user              User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Portrait data
+  imageUrl          String            // Cloudinary URL
+  publicId          String            // Cloudinary public ID for deletion
+  thumbnailUrl      String?           // Thumbnail version
+  
+  // Metadata
+  isActive          Boolean           @default(false)
+  isVerified        Boolean           @default(false) // Face detection passed
+  faceDetected      Boolean           @default(false)
+  faceConfidence    Float?            // Face detection confidence score
+  
+  // Client information
+  clientName        String?
+  clientEmail       String?
+  clientPhone       String?
+  clientNotes       String?
+  
+  // Metadata
+  uploadMethod      PortraitUploadMethod @default(CAMERA)
+  source            String?           // 'camera', 'upload', 'url'
+  metadata          Json?             // EXIF data, camera info, etc.
+  
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  
+  // Associations
+  measurements      Measurement[]     // Measurements using this portrait
+  
+  @@index([userId])
+  @@index([isActive])
+  @@index([isVerified])
+  @@index([createdAt])
+}
+
+model Measurement {
+  id                String            @id @default(cuid())
+  userId            String
+  user              User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Client association
+  portraitId        String?
+  portrait          ClientPortrait?   @relation(fields: [portraitId], references: [id])
+  clientName        String?           // Denormalized for quick display
+  clientEmail       String?           // Denormalized for quick display
+  
+  // Measurement data
+  data              Json
+  sessionId         String            @unique
+  timestamp         DateTime          @default(now())
+  userHeightCm      Float
+  bodyShape         String?
+  confidenceScores  Json?
+  calibrationData   Json?
+  poseFeedback      Json?
+  clothingFeedback  Json?
+  
+  // AI metadata
+  aiModelUsed       String?
+  aiConfidence      Float?
+  
+  // Sharing permissions
+  sharedWithTailors Boolean           @default(false)
+  sharedWithDesigners Boolean         @default(false)
+  sharedWithOrganizations Boolean     @default(false)
+  sharedWithMarketplace Boolean       @default(false)
+  
+  // Synchronization
+  syncedToFysora    Boolean           @default(false)
+  fysoraMeasurementId String?
+  syncedAt          DateTime?
+  
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  
+  auditLogs         AuditLog[]
+  
+  @@index([userId])
+  @@index([timestamp])
+  @@index([userId, timestamp])
+  @@index([sessionId])
+  @@index([syncedToFysora])
+  @@index([bodyShape])
+  @@index([portraitId])
+  @@index([clientName])
+}
+
+enum PortraitUploadMethod {
+  CAMERA
+  UPLOAD
+  URL
+  DRAG_DROP
+}
