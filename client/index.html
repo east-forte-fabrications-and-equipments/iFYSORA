@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <!-- Security: Content Security Policy (adjust as needed) -->
+    <meta http-equiv="Content-Security-Policy" content="
+      default-src 'self';
+      script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com;
+      style-src 'self' 'unsafe-inline';
+      img-src 'self' data: https:;
+      connect-src 'self' https://api.fs-africa.org.ng;
+      frame-ancestors 'none';
+      base-uri 'self';
+      form-action 'self';
+    ">
+
+    <title>iFYSORA – 3D Anthropometric Measurement Platform</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.ico" />
+  </head>
+  <body>
+    <!-- React root element -->
+    <div id="root"></div>
+
+    <!-- Vite entry point – will be replaced during build -->
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
