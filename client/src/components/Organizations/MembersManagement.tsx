@@ -323,3 +323,35 @@ export default function MemberManagement({ organizationId, organizationName, onC
     </div>
   );
   }
+// Add this to MemberManagement.tsx component
+const userRole = user?.role;
+const isOwner = members.some(m => m.userId === user?.id && m.role === 'OWNER');
+const isAdmin = members.some(m => m.userId === user?.id && m.role === 'ADMIN');
+
+// Then conditionally show/hide actions
+{/* Only show invite button if user is Owner or Admin */}
+{(isOwner || isAdmin) && (
+  <button
+    onClick={() => setShowInvite(true)}
+    className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold py-2 px-4 rounded-xl transition"
+  >
+    <UserPlus className="h-4 w-4" />
+    Invite Member
+  </button>
+)}
+
+{/* Only show remove button if user is Owner or Admin, and not removing self */}
+{member.role !== 'OWNER' && (isOwner || isAdmin) && member.userId !== user?.id && (
+  <button
+    onClick={() => handleRemoveMember(member.id)}
+    disabled={removingId === member.id}
+    className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition disabled:opacity-50"
+  >
+    {removingId === member.id ? (
+      <Loader2 className="h-4 w-4 animate-spin" />
+    ) : (
+      <Trash2 className="h-4 w-4" />
+    )}
+  </button>
+)}
+```
