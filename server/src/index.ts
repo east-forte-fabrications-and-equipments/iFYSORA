@@ -9,6 +9,7 @@ import authRoutes from './routes/authRoutes.js';
 import measurementRoutes from './routes/measurementRoutes.js';
 import organizationRoutes from './routes/organizationRoutes.js';
 import exportRoutes from './routes/exportRoutes.js';
+import portraitRoutes from './routes/portraitRoutes.js';
 
 const app = express();
 
@@ -113,6 +114,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/measurements', measurementRoutes);
 app.use('/api/organizations', organizationRoutes);
 app.use('/api/exports', exportRoutes);
+app.use('/api/portraits', portraitRoutes);
 
 // Health check
 app.get('/health', (req, res) => {
