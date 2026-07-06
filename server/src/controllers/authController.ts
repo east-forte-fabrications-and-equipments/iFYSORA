@@ -46,6 +46,9 @@ export class AuthController {
       
       // Hash password
       const hashedPassword = await bcrypt.hash(password, 12);
+    
+      // Generate unique user ID
+      const userId = crypto.randomUUID();
       
       // Create user
       const user = await prisma.user.create({
@@ -72,8 +75,7 @@ export class AuthController {
         });
       } catch (syncError) {
         logger.error('Failed to sync user to FYSORA FASHN:', syncError);
-        // Don't fail registration if sync fails
-      }
+        
       
       // Audit log
       await this.auditService.log({
@@ -87,7 +89,7 @@ export class AuthController {
         userAgent: req.get('user-agent'),
       });
       
-      // Generate tokens
+      // Generate tokens(now using cookies)
       const tokens = this.generateTokens(user);
       
       // Create session
@@ -141,6 +143,60 @@ export class AuthController {
           displayName: true,
           role: true,
           verificationLevel: true,
+ // Create session
+      const refreshToken = crypto.randomBytes(64).toString('hex');
+      await prisma.session.create({
+        data: {
+          userId: user.id,
+          refreshToken: refreshToken,
+          expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+          ipAddress: req.ip,
+          userAgent: req.get('user-agent'),
+        },
+      });
+      
+      // Set HTTP-only cookies
+      this.setAuthCookies(res, tokens.accessToken, refreshToken);
+      
+      return res.status(201).json({
+        success: true,
+        user: {
+          id: user.id,
+          email: user.email,
+          displayName: user.displayName,
+          role: user.role,
+          verificationLevel: user.verificationLevel,
+          isVerified: user.isVerified,
+        },
+        notice: {
+          message: 'By creating an account on iFYSORA, you are also creating a FYSORA FASHN ecosystem account. Your credentials, profile information, and measurement records may be available across FYSORA services according to our Terms of Service and Privacy Policy.',
+          accepted: false,
+          required: true,
+        },
+      });
+      
+    } catch (error) {
+      logger.error('Registration error:', error);
+      return res.status(500).json({
+        error: 'Registration failed',
+        details: error.message,
+      });
+    }
+  }
+  
+  async login(req: Request, res: Response) {
+    try {
+      const { email, password } = req.body;
+      
+      const user = await prisma.user.findUnique({
+        where: { email: email.toLowerCase() },
+        select: {
+          id: true,
+          email: true,
+          passwordHash: true,
+          displayName: true,
+          role: true,
+          verificationLevel: true,
           isVerified: true,
           subscriptionStatus: true,
           planId: true,
@@ -159,7 +215,6 @@ export class AuthController {
           error: 'Invalid credentials',
         });
       }
-      
       // Generate tokens
       const tokens = this.generateTokens(user);
       
@@ -189,6 +244,9 @@ export class AuthController {
         ipAddress: req.ip,
         userAgent: req.get('user-agent'),
       });
+
+       // Set HTTP-only cookies
+      this.setAuthCookies(res, tokens.accessToken, refreshToken);
       
       return res.json({
         success: true,
@@ -270,7 +328,10 @@ export class AuthController {
         },
       });
       
-      return res.json(tokens);
+         // Set new cookies
+      this.setAuthCookies(res, tokens.accessToken, newRefreshToken);
+      
+      return res.json({ success: true });
       
     } catch (error) {
       logger.error('Refresh token error:', error);
@@ -285,11 +346,18 @@ export class AuthController {
     try {
       const userId = (req as any).user.id;
       
-      // Revoke all sessions for this user
-      await prisma.session.updateMany({
-        where: { userId, revokedAt: null },
-        data: { revokedAt: new Date() },
-      });
+        const refreshToken = req.cookies?.refreshToken;
+      
+      if (refreshToken) {
+        await prisma.session.updateMany({
+          where: { refreshToken },
+          data: { revokedAt: new Date() },
+        });
+      }
+      
+      // Clear cookies
+      this.clearAuthCookies(res);
+      
       
       await this.auditService.log({
         userId,
@@ -311,6 +379,44 @@ export class AuthController {
       return res.status(500).json({
         error: 'Logout failed',
         details: error.message,
+      });
+    }
+  }
+
+  async getProfile(req: Request, res: Response) {
+    try {
+      const userId = (req as any).user.id;
+      
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          id: true,
+          email: true,
+          phone: true,
+          displayName: true,
+          role: true,
+          verificationLevel: true,
+          isVerified: true,
+          subscriptionStatus: true,
+          planId: true,
+          ecosystemUserId: true,
+          fysoraUserId: true,
+          profilePicture: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      });
+      
+      if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+      
+      return res.json({ user });
+      
+    } catch (error) {
+      logger.error('Get profile error:', error);
+      return res.status(500).json({
+        error: 'Failed to fetch profile',
       });
     }
   }
@@ -338,4 +444,41 @@ export class AuthController {
     
     return { accessToken, refreshToken };
   }
-                                  }
+            private setAuthCookies(res: Response, accessToken: string, refreshToken: string) {
+    const isProduction = env.NODE_ENV === 'production';
+    
+    // Access token cookie (short-lived)
+    res.cookie('accessToken', accessToken, {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: 'lax',
+      maxAge: 15 * 60 * 1000, // 15 minutes
+      domain: env.COOKIE_DOMAIN,
+    });
+    
+    // Refresh token cookie (long-lived)
+    res.cookie('refreshToken', refreshToken, {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: 'lax',
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+      domain: env.COOKIE_DOMAIN,
+    });
+  }
+  
+  private clearAuthCookies(res: Response) {
+    res.clearCookie('accessToken', {
+      httpOnly: true,
+      secure: env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      domain: env.COOKIE_DOMAIN,
+    });
+    
+    res.clearCookie('refreshToken', {
+      httpOnly: true,
+      secure: env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      domain: env.COOKIE_DOMAIN,
+    });
+  }
+}
